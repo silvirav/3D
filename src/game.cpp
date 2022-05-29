@@ -77,15 +77,27 @@ bool chechCorrectPosition(Vector3 position, float minDistance) {
 	
 }
 
-void  RenderObject(Camera* camera, Entity* entity) {
+void  RenderObject() {
+	shader->enable();
+
+	Camera* cam = Game::instance->camera;
 	shader->setUniform("u_color", Vector4(1, 1, 1, 1));
-	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
-	shader->setUniform("u_texture", texture, 0);
-	shader->setUniform("u_model", entity->model);
+	shader->setUniform("u_viewprojection", cam->viewprojection_matrix);
+	
 	shader->setUniform("u_time", time);
 
+	for each (Entity* obstacle in obstacles)
+	{
+		Matrix44 m;
+		obstacle->model = m;
+		shader->setUniform("u_texture", obstacle->texture, 0);
+		obstacle->model.translate(obstacle->position.x, obstacle->position.y, obstacle->position.z);
+		shader->setUniform("u_model", obstacle->model);
+		obstacle->mesh->render(GL_TRIANGLES);
+
+	}
 	//do the draw call
-	entity->mesh->render(GL_TRIANGLES);
+	shader->disable();
 }
 
 void  RenderObject(Camera* camera, Character* character) {
@@ -109,7 +121,7 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 	canJump = true;
 	collidingDown = false;
 	isJumping = false;
-	numObstacles = 1;
+	numObstacles = 30;
 
 	fps = 0;
 	frame = 0;
@@ -143,7 +155,7 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 	//load one texture without using the Texture Manager (Texture::Get would use the manager)
 	character->texture->load("data/guy2.png"); //si quieres cargar la textura del prota
 	
-	texture->load("data/texture.tga");
+	
 
 	// example of loading Mesh from Mesh Manager
 	//mesh = Mesh::Get("data/box.ASE");
@@ -162,11 +174,11 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 		Entity* obstacle = new Entity();
 		obstacle->model = Matrix44();
 		obstacle->mesh = Mesh::Get("data/box.ASE");
+		obstacle->texture = Texture::Get("data/texture.tga");
 		int tries = 0;
 		Vector3 position = Vector3((rand() % 1000) - 500, (rand() % 50), (rand() % 1000) - 500);
 		while (!chechCorrectPosition(position,100)) {
 			position = Vector3((rand() % 1000) - 500, (rand() % 50), (rand() % 1000) - 500);
-			cout << tries << endl;
 		}
 		obstacle->position = position;
 		obstacles.push_back(obstacle);
@@ -191,12 +203,7 @@ void Game::render(void)
 	glDisable(GL_CULL_FACE);
    
 	//create model matrix for cube
-	for each (Entity* obstacle in obstacles)
-	{
-		obstacle->model = Matrix44();
-		obstacle->model.translate(obstacle->position.x, obstacle->position.y, obstacle->position.z);
-
-	}
+	
 	character->model = Matrix44();
 
 
@@ -218,15 +225,12 @@ void Game::render(void)
 		//upload uniforms
 		
 		RenderObject(camera, character);
-		for each (Entity* obstacle in obstacles)
-		{
-			RenderObject(camera, obstacle);
+		shader->disable();
 
-		}
+		RenderObject();
 
 
 		//disable shader
-		shader->disable();
 
 
 	}
@@ -299,21 +303,26 @@ void Game::update(double seconds_elapsed)
 		
 
 	Vector3 character_center = newPos + Vector3(0,20.0f,0);
-	Vector3 coll;
-	Vector3 collnorm;
-	for each (Entity* obstacle in obstacles)
+	bool isColliding = false;
+
+	for each (Entity * obstacle in obstacles)
 	{
+		Vector3 coll;
+		Vector3 collnorm;
 		if (!(obstacle->mesh->testSphereCollision(obstacle->model, character_center, 19.f, coll, collnorm))) {
-			character->position = newPos;
 			gravity = 9.8f;
 		}
 		else {
-
+			isColliding = true;
 			character->speed.y = 0;
 			gravity = 0;
 		}
 
 	}
+	if(!isColliding)
+		character->position = newPos;
+
+	
 		
 		
 		
