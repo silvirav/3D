@@ -13,10 +13,14 @@ using namespace std;
 
 //some globals
 
+
+Mesh* meshRoomFront = NULL;
+Mesh* meshRoomBack = NULL;
 Mesh* mesh = NULL;
 Texture* texture = new Texture();
 Mesh* mesh_texture = NULL;
 Shader* shader = NULL;
+Shader* shaderAnimated = NULL;
 Animation* anim = NULL;
 float angle = 0;
 float mouse_speed = 100.0f;
@@ -25,6 +29,7 @@ boolean canJump;
 boolean collidingDown;
 boolean isJumping;
 int numObstacles;
+float vel;
 
 class Entity {
 public:
@@ -77,7 +82,7 @@ bool chechCorrectPosition(Vector3 position, float minDistance) {
 	
 }
 
-void  RenderObject() {
+void  RenderObject(Matrix44 m, Matrix44 m2) {
 	shader->enable();
 
 	Camera* cam = Game::instance->camera;
@@ -85,6 +90,13 @@ void  RenderObject() {
 	shader->setUniform("u_viewprojection", cam->viewprojection_matrix);
 	
 	shader->setUniform("u_time", time);
+	shader->setUniform("u_texture", texture, 0);
+
+	shader->setUniform("u_model", m);
+	meshRoomBack->render(GL_TRIANGLES);
+
+	//shader->setUniform("u_model", m2);
+	//meshRoomFront->render(GL_TRIANGLES);
 
 	for each (Entity* obstacle in obstacles)
 	{
@@ -100,14 +112,17 @@ void  RenderObject() {
 	shader->disable();
 }
 
-void  RenderObject(Camera* camera, Character* character) {
-	shader->setUniform("u_color", Vector4(1, 1, 1, 1));
-	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
-	shader->setUniform("u_texture", character->texture, 0);
-	shader->setUniform("u_model", character->model);
-	shader->setUniform("u_time", time);
+void  RenderObject(Camera* camera, Character* character, Skeleton resultSk) {
+	shaderAnimated->setUniform("u_color", Vector4(1, 1, 1, 1));
+	shaderAnimated->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shaderAnimated->setUniform("u_texture", character->texture, 0);
+	shaderAnimated->setUniform("u_model", character->model);
+	shaderAnimated->setUniform("u_time", time);
 
 	//do the draw call
+	shaderAnimated->enable();
+	character->mesh->renderAnimated(GL_TRIANGLES, &resultSk); //combinar dos
+	shaderAnimated->disable();
 	character->mesh->render(GL_TRIANGLES);
 }
 
@@ -121,7 +136,7 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 	canJump = true;
 	collidingDown = false;
 	isJumping = false;
-	numObstacles = 30;
+	numObstacles = 0;
 
 	fps = 0;
 	frame = 0;
@@ -159,13 +174,16 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 
 	// example of loading Mesh from Mesh Manager
 	//mesh = Mesh::Get("data/box.ASE");
-	
-	character->mesh = Mesh::Get("data/guy.obj"); 
-	mesh_texture = Mesh::Get("data/back.obj"); //objeto pequeño
+
+
+	meshRoomBack = Mesh::Get("data/back_part.obj"); //objeto pequeño
+	meshRoomFront = Mesh::Get("data/back_part.obj");
+	character->mesh = Mesh::Get("data/guy.mesh"); 
 
 	// example of shader loading using the shaders manager
+	shaderAnimated = Shader::Get("data/shaders/skinning.vs", "data/shaders/texture_phong.fs"); //animation
 	shader = Shader::Get("data/shaders/basic.vs", "data/shaders/texture.fs");
-
+	texture = Texture::Get("data/texture.tga");
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
 
@@ -214,20 +232,52 @@ void Game::render(void)
 
 	
 
+	//BACKROOM DE DOS PARTES
+	Matrix44 m;
+	m.translate(0, -100, 0);
+	//m.rotate(angleDEG2RAD, Vector3(0, 1, 0));
+	m.scale(200, 200, 200);
+
+	//create model matrix for sphere
 	Matrix44 m2;
-	m2.translate(150, 0, 0); //esto gira con el objeto 1
-	m2.scale(40, 40, 40); //aumentar tamaño si pequeño
+	m2.translate(410, -100, 0);
+	m2.rotate(180*DEG2RAD, Vector3(0, 1, 0));
+	//m2.rotateGlobal(angle * DEG2RAD, Vector3(0, 1, 0));
+	m2.scale(200, 200, 200); //cambiar tamaño bola
+
+
+	Animation* idle = Animation::Get("data/pidle.skanim");
+	//Animation* run = Animation::Get("data/prun.skanim");
+	Animation* walk = Animation::Get("data/pwalk.skanim");
+	//SOLO PARA UNO
+	//idle->assignTime(time);
+	//run->assignTime(time);
+	//walk->assignTime(time);
+	//PARA MAS DE UNO
+
+	float t = fmod(time, idle->duration) / idle->duration;
+	idle->assignTime(t * idle->duration);
+	walk->assignTime(t * walk->duration);
+	//minuto 1.15
+	Skeleton resultSk;
+	blendSkeleton(&idle->skeleton, &walk->skeleton, vel, &resultSk); //el numero decide como se quedara la animacion, 0 es la primera, 1 es la segunda
+
+
+
+
 	if(shader)
 	{
+		
+
 		//enable shader
-		shader->enable();
+		shaderAnimated->enable();
 
 		//upload uniforms
 		
-		RenderObject(camera, character);
-		shader->disable();
+		RenderObject(camera, character, resultSk);
+		shaderAnimated->disable();
 
-		RenderObject();
+		RenderObject(m, m2);
 
 
 		//disable shader
@@ -279,10 +329,11 @@ void Game::update(double seconds_elapsed)
 			canJump = false;
 		}
 	}
-	if (Input::isKeyPressed(SDL_SCANCODE_W) || Input::isKeyPressed(SDL_SCANCODE_UP)) { character->speed = character->speed - forward * character->movmentSpeed; }
-	if (Input::isKeyPressed(SDL_SCANCODE_S) || Input::isKeyPressed(SDL_SCANCODE_DOWN)) { character->speed = character->speed + forward * character->movmentSpeed; }
-	if (Input::isKeyPressed(SDL_SCANCODE_A) || Input::isKeyPressed(SDL_SCANCODE_LEFT)) { character->speed = character->speed - right * character->movmentSpeed;}
-	if (Input::isKeyPressed(SDL_SCANCODE_D) || Input::isKeyPressed(SDL_SCANCODE_RIGHT)) { character->speed = character->speed + right * character->movmentSpeed; }
+	vel = 0.0f;
+	if (Input::isKeyPressed(SDL_SCANCODE_W) || Input::isKeyPressed(SDL_SCANCODE_UP)) { character->speed = character->speed - forward * character->movmentSpeed; vel = 1.0f; }
+	if (Input::isKeyPressed(SDL_SCANCODE_S) || Input::isKeyPressed(SDL_SCANCODE_DOWN)) { character->speed = character->speed + forward * character->movmentSpeed; vel = 1.0f; }
+	if (Input::isKeyPressed(SDL_SCANCODE_A) || Input::isKeyPressed(SDL_SCANCODE_LEFT)) { character->speed = character->speed - right * character->movmentSpeed; vel = 1.0f; }
+	if (Input::isKeyPressed(SDL_SCANCODE_D) || Input::isKeyPressed(SDL_SCANCODE_RIGHT)) { character->speed = character->speed + right * character->movmentSpeed; vel = 1.0f;}
 	if (Input::isKeyPressed(SDL_SCANCODE_C)) { character->rotation = character->rotation - (90 * seconds_elapsed); }
 	if (Input::isKeyPressed(SDL_SCANCODE_V)) { character->rotation = character->rotation + (90 * seconds_elapsed); }
 		//to navigate with the mouse fixed in the middle
