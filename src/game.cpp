@@ -176,13 +176,13 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 	//mesh = Mesh::Get("data/box.ASE");
 
 
-	meshRoomBack = Mesh::Get("data/back_part.obj"); //objeto pequeño
+	meshRoomBack = Mesh::Get("data/back_part.obj"); //objeto pequeÃ±o
 	meshRoomFront = Mesh::Get("data/back_part.obj");
 	character->mesh = Mesh::Get("data/guy.mesh"); 
 
 	// example of shader loading using the shaders manager
 	shaderAnimated = Shader::Get("data/shaders/skinning.vs", "data/shaders/texture_phong.fs"); //animation
-	shader = Shader::Get("data/shaders/basic.vs", "data/shaders/texture.fs");
+	shader = Shader::Get("data/shaders/basic.vs", "data/shaders/texture_phong.fs");
 	texture = Texture::Get("data/texture.tga");
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
@@ -243,7 +243,7 @@ void Game::render(void)
 	m2.translate(410, -100, 0);
 	m2.rotate(180*DEG2RAD, Vector3(0, 1, 0));
 	//m2.rotateGlobal(angle * DEG2RAD, Vector3(0, 1, 0));
-	m2.scale(200, 200, 200); //cambiar tamaño bola
+	m2.scale(200, 200, 200); //cambiar tamaÃ±o bola
 
 
 	Animation* idle = Animation::Get("data/pidle.skanim");
