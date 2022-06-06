@@ -234,13 +234,13 @@ void Game::render(void)
 
 	//BACKROOM DE DOS PARTES
 	Matrix44 m;
-	m.translate(0, -100, 0);
+	//m.translate(0, -100, 0);
 	//m.rotate(angleDEG2RAD, Vector3(0, 1, 0));
 	m.scale(200, 200, 200);
 
 	//create model matrix for sphere
 	Matrix44 m2;
-	m2.translate(410, -100, 0);
+	m2.translate(4070, 0, 0);
 	m2.rotate(180*DEG2RAD, Vector3(0, 1, 0));
 	//m2.rotateGlobal(angle * DEG2RAD, Vector3(0, 1, 0));
 	m2.scale(200, 200, 200); //cambiar tamaño bola
