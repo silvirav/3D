@@ -64,6 +64,9 @@
     <ClCompile Include="..\..\src\extra\jpgd.cpp">
       <Filter>extra</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\pathfinders.cpp">
+      <Filter>extra</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\camera.h" />
@@ -123,6 +126,9 @@
       <Filter>gfx</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\extra\jpgd.h">
+      <Filter>extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\pathfinders.h">
       <Filter>extra</Filter>
     </ClInclude>
   </ItemGroup>
