@@ -5,8 +5,8 @@
 #include "fbo.h"
 #include "shader.h"
 #include "input.h"
-#include "pathfinders.h"
 #include "animation.h"
+#include "libs/bass.h"
 #include <cmath>
 #include <cmath>
 
@@ -14,11 +14,16 @@ using namespace std;
 
 //some globals
 
+HCHANNEL currentMusic=NULL;
+//std::map<std::string, HSAMPLE*> AudioManager::sSamplesLoaded;
+//AudioManager* AudioManager::audio = NULL;
 
 Mesh* meshRoomFront = NULL;
 Mesh* meshRoomBack = NULL;
 Mesh* mesh = NULL;
+Mesh* meshRoom = NULL;
 Texture* texture = new Texture();
+Texture* texture2 = new Texture();
 Mesh* mesh_texture = NULL;
 Shader* shader = NULL;
 Shader* shaderAnimated = NULL;
@@ -34,6 +39,7 @@ int numMonsters;
 float secondsPassed;
 float vel;
 bool isJumpingAnimation;
+
 class Entity {
 public:
 	Matrix44 model;
@@ -74,6 +80,7 @@ Character* character;
 vector<Entity*> obstacles;
 Entity* roomFront;
 Entity* roomBack;
+Entity* room;
 Skeleton idleWalk;
 Skeleton idleJump;
 Skeleton JumpWalk;
@@ -85,20 +92,24 @@ Game* Game::instance = NULL;
 enum STAGE_ID {
 	INTRO = 0,
 	TUTORIAL = 1,
-	PLAY = 2,
-	END = 3
+	PORTAL = 2,
+	PLAY = 3,
+	END = 4
 };
 
 
 class Stage {
 public:
+
 	virtual STAGE_ID GetId() = 0;
 	virtual void Render(Camera* camera, float time) = 0;
 	virtual void Update(float seconds_elapsed) = 0;
 };
 vector<Stage*> stages;
 
-STAGE_ID currentStage = STAGE_ID::PLAY;
+
+
+STAGE_ID currentStage = STAGE_ID::INTRO;
 
 Stage* GetStage(STAGE_ID id) {
 	return stages[(int)id];
@@ -198,7 +209,7 @@ void  RenderObject() {
 	roomFront->mesh->render(GL_TRIANGLES);
 	
 	
-	for each (Entity* obstacle in obstacles)
+	/*for each (Entity * obstacle in obstacles)
 	{
 		Matrix44 m;
 		obstacle->model = m;
@@ -207,12 +218,32 @@ void  RenderObject() {
 		shader->setUniform("u_model", obstacle->model);
 		obstacle->mesh->render(GL_TRIANGLES);
 
-	}
+	}*/
 	//do the draw call
 	shader->disable();
 }
 
+void  RenderObject2() {
+	shader->enable();
 
+	Camera* cam = Game::instance->camera;
+	shader->setUniform("u_color", Vector4(1, 1, 1, 1));
+	shader->setUniform("u_viewprojection", cam->viewprojection_matrix);
+
+	shader->setUniform("u_time", time);
+
+
+	Matrix44 m;
+	room->model = m;
+	room->model.scale(450, 400, 400);
+	shader->setUniform("u_texture", room->texture, 0);
+	shader->setUniform("u_model", room->model);
+	room->mesh->render(GL_TRIANGLES);
+
+
+	
+	shader->disable();
+}
 
 void RenderObject(Camera* camera, Character* character, Skeleton resultSk) {
 	shaderAnimated->setUniform("u_color", Vector4(1, 1, 1, 1));
@@ -229,8 +260,69 @@ void RenderObject(Camera* camera, Character* character, Skeleton resultSk) {
 	character->mesh->render(GL_TRIANGLES);
 }
 
+void RenderGUI(Shader* s, Texture* t) {
+	int windoww = Game::instance->window_width;
+	int windowh = Game::instance->window_height;
+	Mesh quad;
+	quad.createQuad(windoww / 2, windowh / 2, windoww, windowh, false);
+
+	Camera cam2D;
+	cam2D.setOrthographic(0, windoww, windowh, 0, -1, 1);
+
+	Shader* a_shader = s;
+	Texture* tex = t;
+
+	if (!a_shader) return;
+	a_shader->enable();
+
+	a_shader->setUniform("u_color", Vector4(1, 1, 1, 1));
+	a_shader->setUniform("u_viewprojection", cam2D.viewprojection_matrix);
+	if (tex != NULL) {
+		a_shader->setUniform("u_texture", tex, 0);
+	}
+	a_shader->setUniform("u_time", time);
+	a_shader->setUniform("u_tex_tiling", 1.0f);
+	a_shader->setUniform("u_model", Matrix44());
+
+	quad.render(GL_TRIANGLES);
+
+	a_shader->disable();
+}
+
+HSAMPLE LoadSample(const char* fileName) {
+	//El handler para un sample
+		HSAMPLE hSample;
+
+		//El handler para un canal
+		HCHANNEL hSampleChannel;
+
+		//Cargamos un sample del disco duro (memoria, filename, offset, length, max, flags)
+		//use BASS_SAMPLE_LOOP in the last param to have a looped sound
+		hSample = BASS_SampleLoad(false, fileName, 0, 0, 3, 0);
+		if (hSample == 0)
+		{
+			//file not found
+			std::cout << " + ERROR load " << fileName << std::endl;
+		}
+		std::cout << " + AUDIO load " << fileName << std::endl;
+		return hSample;
+}
 
 
+HCHANNEL PlayGameSound(const char* fileName) {
+	
+	HCHANNEL hSampleChannel;
+
+	HSAMPLE hSample= LoadSample(fileName);
+
+
+	hSampleChannel = BASS_SampleGetChannel(hSample, false);
+	
+
+	//Lanzamos un sample
+	BASS_ChannelPlay(hSampleChannel, true);
+	return hSampleChannel;
+}
 
 
 
@@ -241,11 +333,18 @@ public:
 	}
 	void Render(Camera* camera, float time) {
 		
+		Shader* a_shader = Shader::Get("data/shaders/basic.vs", "data/shaders/texture.fs");
+		Texture* tex = Texture::Get("data/stages/titulo.png");
+
+		RenderGUI(a_shader, tex);
 
 	}
 
 	void Update(float seconds_elapsed) {
-
+		if (Input::isKeyPressed(SDL_SCANCODE_SPACE)) {
+			STAGE_ID id = STAGE_ID::TUTORIAL;
+			SetStage(id);
+		}
 	}
 };
 
@@ -254,13 +353,164 @@ public:
 	STAGE_ID GetId() {
 		return STAGE_ID::TUTORIAL;
 	}
+	bool count = true;
+
 	void Render(Camera* camera, float time) {
 
+		
+		
+		Shader* a_shader = Shader::Get("data/shaders/basic.vs", "data/shaders/texture.fs");
+		Texture* tex = Texture::Get("data/stages/keys.png");
+
+		Shader* a_shader2 = Shader::Get("data/shaders/basic.vs", "data/shaders/texture.fs");
+		Texture* tex2 = Texture::Get("data/stages/historia.png");
+
+		if (count == true) {
+			RenderGUI(a_shader, tex);
+		}
+		else {
+			RenderGUI(a_shader2, tex2);
+		}
+		
+		
+	}
+
+	void Update(float seconds_elapsed) {
+		if (Input::isKeyPressed(SDL_SCANCODE_D) || Input::isKeyPressed(SDL_SCANCODE_RIGHT)) { 
+					count = false;}
+		if (Input::isKeyPressed(SDL_SCANCODE_A) || Input::isKeyPressed(SDL_SCANCODE_LEFT)) {
+					count = true;}
+
+		if (Input::isKeyPressed(SDL_SCANCODE_SPACE) & count == false) {
+			STAGE_ID id = STAGE_ID::PORTAL;
+			SetStage(id);
+			currentMusic = PlayGameSound("data/music/sala.wav");
+		}
+		
+	}
+};
+
+class PortalStage : public Stage {
+public:
+	STAGE_ID GetId() {
+		return STAGE_ID::PORTAL;
+	}
+	void Render(Camera* camera, float time) {
+
+		//currentMusic = AudioManager::audio->play("data/music/sala.wav");
+		//currentMusic = PlayGameSound("data/music/sala.wav");
+
+		character->model = Matrix44();
+
+		character->model.translate(character->position.x-500, character->position.y+100, character->position.z-430);
+		character->model.rotate(character->rotation * DEG2RAD*180, Vector3(0, 1, 0));
+
+		camera->lookAt(character->model * Vector3(0, 70, -70), character->model * Vector3(0, 50, -5), Vector3(0, 1, 0));
+
+
+		Animation* idle = Animation::Get("data/char/gidle.skanim");
+		Animation* walk = Animation::Get("data/char/gwalk.skanim");
+
+		Animation* jump = Animation::Get("data/char/gjump.skanim");
+
+		//SOLO PARA UNO
+		idle->assignTime(time);
+		walk->assignTime(time);
+
+		jump->assignTime(time);
+
+
+		if (shader)
+		{
+
+
+			shaderAnimated->enable();
+
+			//upload uniforms
+
+			if (currentAnimation == "idle")
+				RenderObject(camera, character, idle->skeleton);
+			else if (currentAnimation == "walk")
+				RenderObject(camera, character, walk->skeleton);
+			else if (currentAnimation == "jump")
+				RenderObject(camera, character, jump->skeleton);
+			shaderAnimated->disable();
+
+			RenderObject2();
+
+
+
+
+		}
 
 	}
 
 	void Update(float seconds_elapsed) {
 
+		Vector3 forward = character->model.rotateVector(Vector3(0, 0, -1));
+		Vector3 right = character->model.rotateVector(Vector3(-1, 0, 0));
+		Vector3 up = character->model.rotateVector(Vector3(0, -1, 0));
+
+
+		character->speed = Vector3(0.0f, character->speed.y, 0.0f);
+		Vector3 newPos = character->position;
+		if (Input::isKeyPressed(SDL_SCANCODE_J)) {
+			if (canJump) {
+				character->speed = character->speed + Vector3(0.0f, character->jumpSpeed, 0.0f);
+				canJump = false;
+				std::cout << " jump "  << std::endl;
+			}
+		}
+		vel = 0.0f;
+		currentAnimation = "idle";
+		if (Input::isKeyPressed(SDL_SCANCODE_W) || Input::isKeyPressed(SDL_SCANCODE_UP)) { character->speed = character->speed - forward * character->movmentSpeed; vel = 1.0f; currentAnimation = "walk"; }
+		if (Input::isKeyPressed(SDL_SCANCODE_S) || Input::isKeyPressed(SDL_SCANCODE_DOWN)) { character->speed = character->speed + forward * character->movmentSpeed; vel = 1.0f; currentAnimation = "walk"; }
+		if (Input::isKeyPressed(SDL_SCANCODE_A) || Input::isKeyPressed(SDL_SCANCODE_LEFT)) { character->speed = character->speed - right * character->movmentSpeed; vel = 1.0f; currentAnimation = "walk"; }
+		if (Input::isKeyPressed(SDL_SCANCODE_D) || Input::isKeyPressed(SDL_SCANCODE_RIGHT)) { character->speed = character->speed + right * character->movmentSpeed; vel = 1.0f; currentAnimation = "walk"; }
+		if (Input::isKeyPressed(SDL_SCANCODE_C)) { character->rotation = character->rotation - (90 * seconds_elapsed); }
+		if (Input::isKeyPressed(SDL_SCANCODE_V)) { character->rotation = character->rotation + (90 * seconds_elapsed); }
+		if (Input::isKeyPressed(SDL_SCANCODE_P)) { cout << character->position.x << " - " << character->position.y << " - " << character->position.z << endl; }
+		//to navigate with the mouse fixed in the middle
+
+
+
+		newPos = newPos + character->speed * seconds_elapsed;
+
+		if ((newPos.y + character->speed.y * seconds_elapsed) < 0) {
+			character->speed.y = 0.0f;
+			newPos.y = 0;
+		}
+
+		character->speed = character->speed - Vector3(0.0f, gravity, 0.0f);
+
+
+
+
+		Vector3 character_center = newPos + Vector3(0, 20.0f, 0);
+		bool isColliding = false;
+
+		Vector3 collRay;
+		Vector3 collnormRay;
+
+
+
+		bool frontColl = (room->mesh->testRayCollision(room->model, newPos, forward, collRay, collnormRay, 10) );
+		bool backColl = (room->mesh->testRayCollision(room->model, newPos, -1 * forward, collRay, collnormRay, 10) );
+		bool rightColl = (room->mesh->testRayCollision(room->model, newPos, right, collRay, collnormRay, 10) );
+		bool leftColl = (room->mesh->testRayCollision(room->model, newPos, -1 * right, collRay, collnormRay, 10) );
+		bool upColl = (room->mesh->testRayCollision(room->model, newPos, up, collRay, collnormRay, 10) );
+		bool downColl = (room->mesh->testRayCollision(room->model, newPos, -1 * up, collRay, collnormRay, 10) );
+
+		if (!(frontColl || backColl || rightColl || leftColl)) {
+			character->position = newPos;
+		}
+
+		if (Input::isKeyPressed(SDL_SCANCODE_2)) {
+			STAGE_ID id = STAGE_ID::PLAY;
+			SetStage(id);
+			BASS_ChannelPause(currentMusic);
+			currentMusic = PlayGameSound("data/music/room.wav");
+		}
 	}
 };
 
@@ -271,6 +521,13 @@ public:
 	}
 	void Render(Camera* camera, float time) {
 
+		//AudioManager::audio->stop(currentMusic);
+		//currentMusic = AudioManager::audio->play("data/music/room.wav");
+		//AudioManager::audio->play("data/music/room.wav");
+
+		//BASS_ChannelPause(currentMusic);
+		//currentMusic= PlayGameSound("data/music/room.wav");
+		//PlayGameSound("data/music/room.wav");
 
 		character->model = Matrix44();
 
@@ -293,11 +550,11 @@ public:
 
 
 
-		Animation* idle = Animation::Get("data/pidle.skanim");
+		Animation* idle = Animation::Get("data/char/gidle.skanim");
 		//Animation* run = Animation::Get("data/prun.skanim");
-		Animation* walk = Animation::Get("data/pwalk.skanim");
+		Animation* walk = Animation::Get("data/char/gwalk.skanim");
 
-		Animation* jump = Animation::Get("data/pjump.skanim");
+		Animation* jump = Animation::Get("data/char/gjump.skanim");
 
 		//SOLO PARA UNO
 		idle->assignTime(time);
@@ -443,11 +700,13 @@ public:
 
 		character->speed = Vector3(0.0f, character->speed.y, 0.0f);
 		Vector3 newPos = character->position;
-		if (Input::isKeyPressed(SDL_SCANCODE_SPACE)) {
+		if (Input::isKeyPressed(SDL_SCANCODE_J)) {
 			if (canJump) {
 				character->speed = character->speed + Vector3(0.0f, character->jumpSpeed, 0.0f);
 				canJump = false;
+				std::cout << " jump2 " << std::endl;
 			}
+			
 		}
 		vel = 0.0f;
 		currentAnimation = "idle";
@@ -543,6 +802,12 @@ public:
 	}
 	void Render(Camera* camera, float time) {
 
+		Shader* a_shader = Shader::Get("data/shaders/basic.vs", "data/shaders/texture.fs");
+		Texture* tex = Texture::Get("data/stages/end.png");
+
+		
+		RenderGUI(a_shader, tex);
+		
 
 	}
 
@@ -553,6 +818,61 @@ public:
 
 
 
+
+/*
+//----------------------------------------AudioManager----------------------------------------//
+
+AudioManager::AudioManager() {
+	//Inicializamos BASS al arrancar el juego (id_del_device, muestras por segundo, ...)
+	if (BASS_Init(-1, 44100, 0, 0, NULL) == false) //-1 significa usar el por defecto del sistema operativo
+	{
+		//error abriendo la tarjeta de sonido...
+		std::cout << "error init bass" << std::endl;
+	}
+};
+
+HCHANNEL AudioManager::play(const char* filename) {
+
+	assert(filename);
+
+	if (BASS_Init(-1, 44100, 0, 0, NULL) == false) //-1 significa usar el por defecto del sistema operativo
+	{
+		//error abriendo la tarjeta de sonido...
+		std::cout << " + ERROR load " << filename << std::endl;
+	}
+	std::cout << " + AUDIO load " << filename << std::endl;
+	
+
+	//El handler para un sample
+	HSAMPLE hSample = NULL;
+	//El handler para un canal
+	HCHANNEL hSampleChannel = NULL;
+
+	//check if loaded
+	std::map<std::string, HSAMPLE*>::iterator it = sSamplesLoaded.find(filename);
+
+	if (it != sSamplesLoaded.end())
+	{
+		hSample = *it->second;
+		hSampleChannel = BASS_SampleGetChannel(hSample, false);
+		BASS_ChannelPlay(hSampleChannel, true);
+		return hSampleChannel;
+	}
+}
+
+void AudioManager::stop(HCHANNEL hSampleChannel) {
+
+	BASS_ChannelPause(hSampleChannel);
+}
+
+void AudioManager::loadSamples() {
+
+	hSample1 = BASS_SampleLoad(false, "data/music/room.wav", 0, 0, 20, BASS_SAMPLE_LOOP);
+	sSamplesLoaded["data/music/room.wav"] = &hSample1;
+	hSample2 = BASS_SampleLoad(false, "data/music/sala.wav", 0, 0, 20, BASS_SAMPLE_LOOP);
+	sSamplesLoaded["data/music/sala.wav"] = &hSample2;
+}
+*/
 Game::Game(int window_width, int window_height, SDL_Window* window)
 {
 	this->window_width = window_width;
@@ -575,6 +895,7 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 
 	stages.push_back(new IntroStage());
 	stages.push_back(new TutorialStage());
+	stages.push_back(new PortalStage());
 	stages.push_back(new PlayStage());
 	stages.push_back(new EndStage());
 
@@ -608,42 +929,54 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 	camera->setPerspective(70.f, window_width / (float)window_height, 0.1f, 10000.f); //set the projection, we want to be perspective
 
 	//load one texture without using the Texture Manager (Texture::Get would use the manager)
-	character->texture->load("data/guy2.png"); //si quieres cargar la textura del prota
-
+	character->texture->load("data/char/guy.png"); //si quieres cargar la textura del prota
 
 
 	// example of loading Mesh from Mesh Manager
 	//mesh = Mesh::Get("data/box.ASE");
 
 
-	meshRoomBack = Mesh::Get("data/back_part.obj"); //objeto pequeño
-	meshRoomFront = Mesh::Get("data/back_part.obj");
-	character->mesh = Mesh::Get("data/guy.mesh");
+	meshRoomBack = Mesh::Get("data/salas/back_part.obj"); //objeto pequeño
+	meshRoomFront = Mesh::Get("data/salas/back_part.obj");
+	meshRoom= Mesh::Get("data/salas/sala.obj");
+	character->mesh = Mesh::Get("data/char/guy.mesh");
 
 	// example of shader loading using the shaders manager
 	shaderAnimated = Shader::Get("data/shaders/skinning.vs", "data/shaders/texture_phong.fs"); //animation
 	shader = Shader::Get("data/shaders/basic.vs", "data/shaders/texture_phong.fs");
-	texture = Texture::Get("data/texture.tga");
+	texture = Texture::Get("data/salas/color.tga");
+	texture2= Texture::Get("data/salas/sala.png");
 	//hide the cursor
 	SDL_ShowCursor(!mouse_locked); //hide or show the mouse
 
 
 	roomFront = new Entity();
 	roomFront->model = Matrix44();
-	roomFront->mesh = Mesh::Get("data/back_part.obj");
-	roomFront->texture = Texture::Get("data/texture.tga");
+	roomFront->mesh = meshRoomFront;
+	//roomFront->mesh = Mesh::Get("data/back_part.obj");
+	//roomFront->texture = Texture::Get("data/salas/color.tga");
+	roomFront->texture = texture;
 
 	roomBack = new Entity();
 	roomBack->model = Matrix44();
-	roomBack->mesh = Mesh::Get("data/back_part.obj");
-	roomBack->texture = Texture::Get("data/texture.tga");
+	roomBack->mesh = meshRoomBack;
+	//roomBack->mesh = Mesh::Get("data/back_part.obj");
+	//roomBack->texture = Texture::Get("data/texture.tga");
+	roomBack->texture = texture;
+
+	
+	room = new Entity();
+	room->model = Matrix44();
+	room->mesh = meshRoom;
+	room->texture = texture2;
 
 	for (int i = 0; i < numMonsters; i++) {
 		Monster* monster = new Monster();
 		monster->position = monstersPositions[i];
 		monster->pivot = monster->position;
 		monster->model = Matrix44();
-		monster->mesh = Mesh::Get("data/monster.obj");
+		monster->mesh = Mesh::Get("data/char/monster.obj");
+		//monster->texture= Texture::Get("data/char/black.jpg");  //no encuentro donde se pone el color v:
 		monster->detectedCounter = 0;
 		monster->isDetecting = false;
 		monster->rotation = 0;
@@ -651,21 +984,20 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 
 	}
 
-	for (int i = 0; i < numObstacles; i++) {
-		Entity* obstacle = new Entity();
-		obstacle->model = Matrix44();
-		obstacle->mesh = Mesh::Get("data/box.ASE");
-		obstacle->texture = Texture::Get("data/texture.tga");
-		int tries = 0;
-		Vector3 position = Vector3((rand() % 1000) - 500, (rand() % 50), (rand() % 1000) - 500);
-		while (!chechCorrectPosition(position, 100)) {
-			position = Vector3((rand() % 1000) - 500, (rand() % 50), (rand() % 1000) - 500);
-		}
-		obstacle->position = position;
-		obstacles.push_back(obstacle);
+
+	//AudioManager::getInstance()->loadSamples();
+
+	//AudioManager::audio->play("data/music/sala.wav");
+
+	//BASS
+	
+	if (BASS_Init(-1, 44100, 0, 0, NULL) == false) //-1 significa usar el por defecto del sistema operativo
+	{
+		//error abriendo la tarjeta de sonido...
+		std::cout << "error init bass" << std::endl;
 	}
 
-
+	//currentMusic= PlayGameSound("data/music/sala.wav");
 }
 
 
@@ -733,7 +1065,7 @@ void Game::onKeyUp(SDL_KeyboardEvent event)
 {
 	switch (event.keysym.sym)
 	{
-		case SDLK_SPACE:canJump = true; break;
+		case SDLK_j:canJump = true; break;
 	}
 }
 
@@ -773,4 +1105,3 @@ void Game::onResize(int width, int height)
 	window_width = width;
 	window_height = height;
 }
-
