@@ -298,7 +298,7 @@ HSAMPLE LoadSample(const char* fileName) {
 
 		//Cargamos un sample del disco duro (memoria, filename, offset, length, max, flags)
 		//use BASS_SAMPLE_LOOP in the last param to have a looped sound
-		hSample = BASS_SampleLoad(false, fileName, 0, 0, 3, 0);
+		hSample = BASS_SampleLoad(false, fileName, 0, 0, 3, BASS_SAMPLE_LOOP);
 		if (hSample == 0)
 		{
 			//file not found
