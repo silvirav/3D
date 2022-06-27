@@ -385,6 +385,7 @@ public:
 			STAGE_ID id = STAGE_ID::PORTAL;
 			SetStage(id);
 			currentMusic = PlayGameSound("data/music/sala.wav");
+			BASS_SetVolume(0.01); //cambia volumen global
 		}
 		
 	}
@@ -510,6 +511,7 @@ public:
 			SetStage(id);
 			BASS_ChannelPause(currentMusic);
 			currentMusic = PlayGameSound("data/music/room.wav");
+			BASS_SetVolume(0.5); //cambia volumen global
 		}
 	}
 };
