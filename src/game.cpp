@@ -133,6 +133,17 @@ void SetStage(STAGE_ID id) {
 	currentStage = id;
 }
 
+void setPlayPosition() {
+	
+	character->position = Vector3(-1799.51, 0, -901.637);
+}
+
+void setPortalPosition() {
+
+	character->position = Vector3(380.7, 0, -13.1936);
+}
+
+
 float distance(Vector3 point1, Vector3 point2) {
 	float xDistance = pow((point1.x - point2.x), 2);
 	float yDistance = pow((point1.y - point2.y), 2);
@@ -167,6 +178,18 @@ bool chechCorrectPosition(Vector3 position, float minDistance) {
 }
 
 
+void positionadePortals() {
+	dimensionalPortals.clear();
+	for (int i = 0; i < numPortals; i++) {
+		Entity* portal = new Entity();
+		portal->mesh = Mesh::Get("data/salas/agujero.obj");
+		portal->model = Matrix44();
+		portal->texture = Texture::Get("data/salas/agujero.png");
+		portal->position = portalPositions[i];
+		dimensionalPortals.push_back(portal);
+	}
+	
+}
 
 void RenderMonster() {
 	shader->enable();
@@ -468,6 +491,7 @@ public:
 		if (Input::isKeyPressed(SDL_SCANCODE_SPACE) & count == false) {
 			STAGE_ID id = STAGE_ID::PORTAL;
 			SetStage(id);
+			setPortalPosition();
 			currentMusic = PlayGameSound("data/music/sala.wav");
 			BASS_ChannelSetAttribute(currentMusic, BASS_ATTRIB_VOL, 0.1);
 				
@@ -583,6 +607,7 @@ public:
 			if (isPortal()) {
 				STAGE_ID id = STAGE_ID::PLAY;
 				SetStage(id);
+				setPlayPosition();
 				BASS_ChannelPause(currentMusic);
 				currentMusic = PlayGameSound("data/music/room.mp3");
 				
@@ -866,6 +891,9 @@ public:
 	void Update(float seconds_elapsed) {
 		if (Input::isKeyPressed(SDL_SCANCODE_R)) {
 			SetStage(STAGE_ID::PORTAL);
+			setPortalPosition();
+			positionadePortals();
+			portalsReached = 0;
 		}
 	}
 };
@@ -900,7 +928,7 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 	portalPositions.push_back(Vector3(6057.67, 70, 817.688));
 	portalPositions.push_back(Vector3(5115.37, 70, -1357.62));
 	portalPositions.push_back(Vector3(-883.924, 70, 1363.92));
-
+	positionadePortals();
 
 
 
@@ -947,14 +975,7 @@ Game::Game(int window_width, int window_height, SDL_Window* window)
 
 	// example of loading Mesh from Mesh Manager
 	//mesh = Mesh::Get("data/box.ASE");
-	for (int i = 0; i < numPortals; i++) {
-		Entity* portal = new Entity();
-		portal->mesh = Mesh::Get("data/salas/agujero.obj");
-		portal->model =  Matrix44();
-		portal->texture = Texture::Get("data/salas/agujero.png");
-		portal->position = portalPositions[i];
-		dimensionalPortals.push_back(portal);
-	}
+	
 
 
 
