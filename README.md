@@ -1,3 +1,8 @@
+# BACKROOM: DISCOVERY #
+
+This videogame has been developed by David Carrascosa and Silvia Reverte
+
+
 # TJE Framework #
 
 TJE Framework is a C++ layer on top of SDL and OpenGL to help create games or visual applications.
